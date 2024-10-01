@@ -1,0 +1,141 @@
+let net;
+const videoElement = document.getElementById('workout-video');
+const canvas = document.getElementById('pose-canvas');
+const ctx = canvas.getContext('2d');
+let totalFrames = 0;
+let correctFrames = 0;
+
+// Initialize PoseNet
+async function initPoseNet() {
+    net = await posenet.load();
+    console.log('PoseNet model loaded.');
+}
+
+// Access the camera and start the live video feed
+async function startVideo() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: true
+        });
+        videoElement.srcObject = stream;
+    } catch (error) {
+        console.error("Error accessing camera: ", error);
+        document.getElementById('workout-feedback').textContent = "Error accessing camera.";
+    }
+}
+
+// Start analyzing the posture automatically when the page is loaded
+async function startPostureEvaluation() {
+    document.getElementById('workout-feedback').textContent = "Tracking posture...";
+
+    setInterval(async () => {
+        const pose = await detectPose();
+        if (pose) {
+            drawPose(pose);
+            evaluatePosture(pose);
+        }
+    }, 500); // Detect every 500ms
+}
+
+// Detect Pose in the video
+async function detectPose() {
+    const pose = await net.estimateSinglePose(videoElement, {
+        flipHorizontal: false
+    });
+    totalFrames++;
+    return pose;
+}
+
+// Draw Pose on Canvas
+function drawPose(pose) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    pose.keypoints.forEach(point => {
+        if (point.score > 0.5) {
+            const { y, x } = point.position;
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
+        }
+    });
+
+    drawDetectionLines(pose);
+}
+
+// Draw detection lines between key points (shoulders, hips, and knees)
+function drawDetectionLines(pose) {
+    const leftShoulder = pose.keypoints.find(k => k.part === 'leftShoulder');
+    const rightShoulder = pose.keypoints.find(k => k.part === 'rightShoulder');
+    const leftHip = pose.keypoints.find(k => k.part === 'leftHip');
+    const rightHip = pose.keypoints.find(k => k.part === 'rightHip');
+
+    if (leftShoulder && rightShoulder && leftHip && rightHip) {
+        ctx.beginPath();
+        ctx.moveTo(leftShoulder.position.x, leftShoulder.position.y);
+        ctx.lineTo(leftHip.position.x, leftHip.position.y);
+        ctx.lineTo(rightHip.position.x, rightHip.position.y);
+        ctx.lineTo(rightShoulder.position.x, rightShoulder.position.y);
+        ctx.closePath();
+        ctx.strokeStyle = 'blue';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+
+// Evaluate the posture (whether the user is sitting straight or not)
+function evaluatePosture(pose) {
+    const leftShoulder = pose.keypoints.find(k => k.part === 'leftShoulder');
+    const rightShoulder = pose.keypoints.find(k => k.part === 'rightShoulder');
+    const leftHip = pose.keypoints.find(k => k.part === 'leftHip');
+    const rightHip = pose.keypoints.find(k => k.part === 'rightHip');
+
+    if (leftShoulder && rightShoulder && leftHip && rightHip) {
+        // Shoulder and hip vertical alignment
+        const shoulderAlignment = Math.abs(leftShoulder.position.y - rightShoulder.position.y);
+        const hipAlignment = Math.abs(leftHip.position.y - rightHip.position.y);
+
+        // Check the x-axis alignment (slouching or leaning forward/backward)
+        const shoulderToHipDiffLeft = Math.abs(leftShoulder.position.x - leftHip.position.x);
+        const shoulderToHipDiffRight = Math.abs(rightShoulder.position.x - rightHip.position.x);
+
+        const alignmentThreshold = 15; // Maximum allowed y-axis difference between shoulders and hips
+        const slouchingThreshold = 50; // Maximum x-axis difference to check for slouching
+
+        // Evaluate for slouching or leaning
+        const isSlouching = (shoulderToHipDiffLeft > slouchingThreshold || shoulderToHipDiffRight > slouchingThreshold);
+        const isLeaning = shoulderAlignment > alignmentThreshold || hipAlignment > alignmentThreshold;
+
+        // If the user is not slouching or leaning, it's correct posture
+        if (!isSlouching && !isLeaning) {
+            correctFrames++;
+            document.getElementById('form-feedback').textContent = "Good posture! Keep sitting straight.";
+            document.getElementById('form-feedback').style.color = "green";
+        } else {
+            if (isSlouching) {
+                document.getElementById('form-feedback').textContent = "You're slouching! Push your back up and sit straight.";
+                document.getElementById('form-feedback').style.color = "orange";
+            }
+            if (isLeaning) {
+                document.getElementById('form-feedback').textContent = "You're leaning! Align your shoulders and hips.";
+                document.getElementById('form-feedback').style.color = "red";
+            }
+        }
+
+        // Update accuracy percentage
+        const accuracy = (correctFrames / totalFrames) * 100;
+        document.getElementById('accuracy-value').textContent = ${accuracy.toFixed(2)}%;
+    }
+}
+
+// Dark Mode Toggle
+document.getElementById('dark-mode-toggle').addEventListener('change', function () {
+    document.body.classList.toggle('dark-mode');
+});
+
+// Initialize the application when the page loads
+window.onload = async () => {
+    await initPoseNet();
+    await startVideo();
+    startPostureEvaluation();
+};

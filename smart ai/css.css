@@ -1,0 +1,43 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    background-color: #f0f0f0;
+}
+
+#pose-canvas {
+    border: 1px solid black;
+}
+
+.dark-mode {
+    background-color: #121212;
+    color: white;
+}
+
+.feedback {
+    margin-top: 20px;
+    font-size: 1.2em;
+}
+
+#workout-feedback {
+    margin-top: 10px;
+    font-size: 1.5em;
+    color: blue;
+}
+
+#form-feedback {
+    margin-top: 10px;
+    font-size: 1.5em;
+}
+
+.toggle-container {
+    margin-top: 20px;
+}
+
+button {
+    margin: 10px;
+    padding: 10px 20px;
+    font-size: 1em;
+    cursor: pointer;
+}
